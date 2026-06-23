@@ -32,7 +32,8 @@ export class StorageService {
     fs.writeFileSync(localPath, fileBuffer);
     
     // Return mock file access URL
-    const localUrl = `http://localhost:${process.env.PORT || 5000}/uploads/${fileName}`;
+    const backendBaseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const localUrl = `${backendBaseUrl}/uploads/${fileName}`;
     console.log(`[STORAGE SERVICE] File uploaded locally. Access URL: ${localUrl}`);
     return localUrl;
   }
