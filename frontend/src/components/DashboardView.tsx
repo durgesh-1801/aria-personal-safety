@@ -53,12 +53,23 @@ export default function DashboardView({
         (pos) => {
           setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
-        () => {
-          // GPS unavailable — use fallback
-          setGpsCoords({ lat: 37.7749, lng: -122.4194 });
+        (err) => {
+          const errorDetails = {
+            code: err?.code || 0,
+            message: err?.message || 'Unknown error during GPS watch.',
+            reason: err?.code === 1 ? 'PERMISSION_DENIED' :
+                    err?.code === 2 ? 'POSITION_UNAVAILABLE' :
+                    err?.code === 3 ? 'TIMEOUT' : 'UNKNOWN'
+          };
+          console.warn('[DASHBOARD] GPS watch failed', errorDetails);
+          // GPS unavailable — use fallback (Option B)
+          setGpsCoords({ lat: 0, lng: 0 });
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
+    } else {
+      console.warn('[DASHBOARD] Geolocation not supported by this browser');
+      setGpsCoords({ lat: 0, lng: 0 });
     }
     return () => { if (watchId) navigator.geolocation.clearWatch(watchId); };
   }, []);
