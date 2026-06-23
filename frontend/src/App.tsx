@@ -270,7 +270,7 @@ export default function App() {
   // ── SOS trigger ─────────────────────────────────────────────────────────
   const handleTriggerSOS = async (triggerType: string = 'manual', extraInfo?: string, coords?: { lat: number; lng: number } | null) => {
     try {
-      // Get current GPS
+      // Get current GPS - default/fallback to 0, 0 if acquisition fails (API NOT NULL constraint requires numbers)
       let latitude = 0;
       let longitude = 0;
       if (coords) {
@@ -278,13 +278,28 @@ export default function App() {
         longitude = coords.lng;
       } else {
         try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
-          );
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            if (!navigator.geolocation) {
+              reject(new Error('Geolocation not supported'));
+              return;
+            }
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 300000 // use cached position up to 5 minutes old
+            });
+          });
           latitude = pos.coords.latitude;
           longitude = pos.coords.longitude;
-        } catch {
-          console.warn('[SOS] GPS unavailable, using defaults.');
+        } catch (err: any) {
+          const errorDetails = {
+            code: err?.code || 0,
+            message: err?.message || 'Unknown error during GPS acquisition.',
+            reason: err?.code === 1 ? 'PERMISSION_DENIED' :
+                    err?.code === 2 ? 'POSITION_UNAVAILABLE' :
+                    err?.code === 3 ? 'TIMEOUT' : 'UNKNOWN'
+          };
+          console.warn('[SOS] GPS acquisition failed', errorDetails);
         }
       }
 
