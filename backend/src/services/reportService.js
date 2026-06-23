@@ -15,6 +15,7 @@ export class ReportService {
   static async generateIncidentPDF(incident, user) {
     return new Promise((resolve, reject) => {
       try {
+        const backendBaseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`;
         const doc = new PDFDocument({ margin: 50 });
         const fileName = `report_${incident.id}.pdf`;
         const filePath = path.join(reportsDir, fileName);
@@ -82,7 +83,7 @@ export class ReportService {
 
         // Evidence Links
         doc.fontSize(11).font('Helvetica-Bold').text('Evidence Links:', 50, 485);
-        const evidenceUrl = `http://localhost:${process.env.PORT || 5000}/uploads/evidence_${incident.id}.wav`;
+        const evidenceUrl = `${backendBaseUrl}/uploads/evidence_${incident.id}.wav`;
         doc.fillColor('#3b82f6').font('Helvetica').text(evidenceUrl, 160, 485, { link: evidenceUrl });
         doc.fillColor('#1f2937');
 
@@ -112,7 +113,7 @@ export class ReportService {
         doc.end();
 
         writeStream.on('finish', () => {
-          const downloadUrl = `http://localhost:${process.env.PORT || 5000}/uploads/reports/${fileName}`;
+          const downloadUrl = `${backendBaseUrl}/uploads/reports/${fileName}`;
           resolve(downloadUrl);
         });
 
