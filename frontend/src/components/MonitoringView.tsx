@@ -107,8 +107,22 @@ export default function MonitoringView({
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => setGpsCoords({ lat: 37.7749, lng: -122.4194 })
+        (err) => {
+          const errorDetails = {
+            code: err?.code || 0,
+            message: err?.message || 'Unknown error during GPS initialization.',
+            reason: err?.code === 1 ? 'PERMISSION_DENIED' :
+                    err?.code === 2 ? 'POSITION_UNAVAILABLE' :
+                    err?.code === 3 ? 'TIMEOUT' : 'UNKNOWN'
+          };
+          console.warn('[MONITORING] GPS initial load failed', errorDetails);
+          setGpsCoords({ lat: 0, lng: 0 });
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 300000 }
       );
+    } else {
+      console.warn('[MONITORING] Geolocation not supported by this browser');
+      setGpsCoords({ lat: 0, lng: 0 });
     }
   }, []);
 
@@ -236,23 +250,43 @@ export default function MonitoringView({
   };
 
   // ── Upload Chunk ──────────────────────────────────────────────────────────
-  const uploadChunk = async (blob: Blob, sid: string) => {
+  const uploadChunk = async (audioBlob: Blob, sid: string) => {
     setUploading(true);
     try {
-      // Get latest GPS
+      // Get latest GPS (read directly from resolved values to avoid React state race condition)
+      let lat = gpsCoords.lat;
+      let lng = gpsCoords.lng;
       try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 })
-        );
-        setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      } catch {
-        // use existing coords
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          if (!navigator.geolocation) {
+            reject(new Error('Geolocation not supported'));
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 10000 // allow fresh or slightly cached position
+          });
+        });
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        setGpsCoords({ lat, lng });
+      } catch (err: any) {
+        const errorDetails = {
+          code: err?.code || 0,
+          message: err?.message || 'Unknown error during active monitoring GPS refresh.',
+          reason: err?.code === 1 ? 'PERMISSION_DENIED' :
+                  err?.code === 2 ? 'POSITION_UNAVAILABLE' :
+                  err?.code === 3 ? 'TIMEOUT' : 'UNKNOWN'
+        };
+        console.warn('[MONITORING] Active GPS refresh failed, using last known coordinates', errorDetails);
       }
 
       const formData = new FormData();
-      formData.append('file', blob, `chunk_${Date.now()}.webm`);
-      formData.append('latitude', gpsCoords.lat.toString());
-      formData.append('longitude', gpsCoords.lng.toString());
+      formData.append("file", audioBlob, "chunk.webm");
+      console.log('[MONITORING] FormData file appended');
+      formData.append('latitude', lat.toString());
+      formData.append('longitude', lng.toString());
       formData.append('isIsolated', 'false');
       formData.append('sessionId', sid);
 
@@ -275,8 +309,8 @@ export default function MonitoringView({
             userId: '',
             status: 'active',
             triggerType: data.autoIncident.triggerType,
-            latitude: gpsCoords.lat,
-            longitude: gpsCoords.lng,
+            latitude: lat,
+            longitude: lng,
             riskScore: data.autoIncident.riskScore,
             audioTranscript: data.transcript,
             createdAt: new Date().toISOString(),
