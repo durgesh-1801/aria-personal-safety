@@ -71,6 +71,10 @@ app.get('/health', (req, res) => {
   res.status(200).json({ success: true, status: 'ONLINE', service: 'ARIA Backend Server' });
 });
 
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ success: true, status: 'ONLINE', service: 'ARIA Backend Server' });
+});
+
 // Setup socket connection handlers
 setupLiveTracking(io);
 
