@@ -128,10 +128,12 @@ export async function initializeDatabase() {
         risk_score INTEGER DEFAULT 0,
         audio_transcript TEXT,
         audio_url TEXT,
+        notification_logs JSONB DEFAULT '[]'::jsonb,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS audio_url TEXT;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS notification_logs JSONB DEFAULT '[]'::jsonb;
 
       CREATE TABLE IF NOT EXISTS location_history (
         id SERIAL PRIMARY KEY,

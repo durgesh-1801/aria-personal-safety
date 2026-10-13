@@ -130,26 +130,47 @@ export const createIncident = asyncHandler(async (req, res) => {
 
 export const getIncidents = asyncHandler(async (req, res) => {
   const userId = req.userId;
-  const list = await Incident.findByUserId(userId);
-  
-  const enrichedList = await Promise.all(list.map(async (inc) => {
-    const user = await User.findById(inc.userId);
-    let signedAudioUrl = inc.audioUrl;
-    if (inc.audioUrl) {
-      signedAudioUrl = await StorageService.getSignedUrl(inc.audioUrl);
-    }
-    return {
-      ...inc,
-      audioUrl: signedAudioUrl,
-      userName: user ? user.name : 'Unknown User',
-      userPhone: user ? user.phone : 'N/A'
-    };
-  }));
+  try {
+    const list = await Incident.findByUserId(userId);
+    
+    const enrichedList = await Promise.all((list || []).map(async (inc) => {
+      try {
+        const user = await User.findById(inc.userId);
+        let signedAudioUrl = inc.audioUrl;
+        if (inc.audioUrl) {
+          try {
+            signedAudioUrl = await StorageService.getSignedUrl(inc.audioUrl);
+          } catch (e) {
+            console.warn('[INCIDENTS] Audio signing error:', e.message);
+          }
+        }
+        return {
+          ...inc,
+          audioUrl: signedAudioUrl,
+          userName: user ? user.name : 'Unknown User',
+          userPhone: user ? user.phone : 'N/A'
+        };
+      } catch (innerErr) {
+        return {
+          ...inc,
+          userName: 'User',
+          userPhone: 'N/A'
+        };
+      }
+    }));
 
-  return res.status(200).json({
-    success: true,
-    incidents: enrichedList
-  });
+    return res.status(200).json({
+      success: true,
+      incidents: enrichedList
+    });
+  } catch (err) {
+    console.error('[INCIDENTS] getIncidents error:', err.message);
+    return res.status(200).json({
+      success: true,
+      incidents: [],
+      warning: 'Could not load incident history'
+    });
+  }
 });
 
 export const getIncidentById = asyncHandler(async (req, res) => {

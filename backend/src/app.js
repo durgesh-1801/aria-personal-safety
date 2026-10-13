@@ -68,12 +68,33 @@ export const isOriginAllowed = (origin) => {
   if (allowedOrigins.includes(origin)) return true;
   try {
     const url = new URL(origin);
-    const host = url.hostname;
+    const host = url.hostname.toLowerCase();
     if (host === 'localhost' || host === '127.0.0.1') return true;
-    if (host.endsWith('.vercel.app') || host.endsWith('.onrender.com') || host.endsWith('.netlify.app')) return true;
+    if (
+      host.endsWith('.vercel.app') ||
+      host.endsWith('.onrender.com') ||
+      host.endsWith('.netlify.app') ||
+      host.endsWith('.pages.dev')
+    ) return true;
   } catch (e) {}
+  if (process.env.NODE_ENV !== 'production') return true;
   return false;
 };
+
+const standardAllowedHeaders = [
+  'Content-Type',
+  'Authorization',
+  'X-Requested-With',
+  'Accept',
+  'X-Internal-Secret',
+  'Cache-Control',
+  'cache-control',
+  'Pragma',
+  'pragma',
+  'Expires',
+  'Origin',
+  'X-Health-Check'
+];
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -86,7 +107,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-Internal-Secret']
+  allowedHeaders: standardAllowedHeaders
 };
 
 const app = express();
@@ -102,6 +123,26 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 5000;
+
+// Universal CORS headers & Preflight response handler
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    const reqHeaders = req.headers['access-control-request-headers'];
+    if (reqHeaders) {
+      res.setHeader('Access-Control-Allow-Headers', reqHeaders);
+    } else {
+      res.setHeader('Access-Control-Allow-Headers', standardAllowedHeaders.join(', '));
+    }
+  }
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 // Enable CORS with preflight handling and JSON parsing
 app.use(cors(corsOptions));
@@ -178,6 +219,11 @@ app.get('/api/health', async (req, res) => {
   const { dbMode, dbModeDescription } = getHealthStatus();
   const ai = await AIService.checkHealth();
   res.status(200).json({ success: true, status: 'ONLINE', service: 'ARIA Backend Server', dbMode, dbModeDescription, ai });
+});
+
+app.get('/api/ping', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.status(200).json({ success: true, status: 'ONLINE', timestamp: new Date().toISOString() });
 });
 
 // Setup socket connection handlers

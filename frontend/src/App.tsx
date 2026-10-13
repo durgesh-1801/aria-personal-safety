@@ -5,7 +5,7 @@ import { UserProfile, EmergencyContact, IncidentItem, Screen, BackendIncident } 
 // Services
 import { isAuthenticated, logout as authLogout, getUser, setToken, setUser, getToken } from './services/auth';
 import { authService, profileService, incidentService, healthService } from './services/api';
-import { connectSocket, disconnectSocket, onIncidentCreated, onIncidentResolved } from './services/socket';
+import { connectSocket, disconnectSocket, onIncidentCreated, onIncidentResolved, getSocket } from './services/socket';
 import { getContacts, saveContacts, seedDefaultContacts, addContact as addContactLocal, removeContact as removeContactLocal } from './services/contacts';
 import { getRealCoordinates } from './services/location';
 
@@ -287,27 +287,52 @@ export default function App() {
     };
   }, [currentScreen, sosIncidentId]);
 
-  // ── Backend health check ────────────────────────────────────────────────
+  // ── Backend health check & Socket connection sync ─────────────────────────
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     
     const checkHealth = async () => {
       try {
         const res = await healthService.check();
-        const isOnline = res.data.success === true;
-        setBackendOnline(isOnline);
+        const isOnline = res.data && (res.data.success === true || res.data.status === 'ONLINE');
+        setBackendOnline(Boolean(isOnline));
         if (isOnline) {
           // If connectivity recovered, immediately attempt sending any queued alerts
           processRetryQueue();
         }
       } catch {
-        setBackendOnline(false);
+        // Fallback: If WebSocket connection is active, the backend is definitely online!
+        const s = getSocket();
+        if (s && s.connected) {
+          setBackendOnline(true);
+        } else {
+          setBackendOnline(false);
+        }
       }
     };
 
     if (isAuthenticated()) {
       checkHealth();
-      interval = setInterval(checkHealth, 30000);
+      interval = setInterval(checkHealth, 25000);
+
+      // Listen directly to socket lifecycle events to keep the online indicator reactive
+      const s = getSocket() || connectSocket();
+      if (s) {
+        if (s.connected) setBackendOnline(true);
+        const onConnect = () => setBackendOnline(true);
+        const onDisconnect = () => {
+          // Re-verify before declaring offline
+          checkHealth();
+        };
+        s.on('connect', onConnect);
+        s.on('disconnect', onDisconnect);
+
+        return () => {
+          if (interval) clearInterval(interval);
+          s.off('connect', onConnect);
+          s.off('disconnect', onDisconnect);
+        };
+      }
     }
 
     return () => { if (interval) clearInterval(interval); };

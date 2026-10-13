@@ -101,7 +101,6 @@ export const profileService = {
 export const monitoringService = {
   health: () => api.get('/api/health', {
     params: { _healthCheck: Date.now() },
-    headers: { 'Cache-Control': 'no-store' },
     timeout: 6000,
   }),
   startSession: () => api.post('/api/monitoring/start'),
@@ -130,7 +129,20 @@ export const reportService = {
 };
 
 export const healthService = {
-  check: () => api.get('/health', { timeout: 5000 }),
+  check: async () => {
+    try {
+      return await api.get('/api/health', {
+        params: { _t: Date.now() },
+        timeout: 6000,
+      });
+    } catch (err: any) {
+      // Fallback: If /api/health is blocked or timing out, check lightweight /api/ping or root /
+      return await api.get('/api/ping', {
+        params: { _t: Date.now() },
+        timeout: 4000,
+      });
+    }
+  },
 };
 
 export default api;
