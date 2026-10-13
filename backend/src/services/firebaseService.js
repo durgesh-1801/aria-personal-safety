@@ -8,6 +8,14 @@ if (typeof admin.messaging !== 'function') {
 
 export class FirebaseService {
   static async sendPoliceBroadcast(incident) {
+    if (!admin.getApps().length) {
+      console.log('[FIREBASE] Skipped police push broadcast: Firebase Admin SDK not configured in this environment.');
+      return {
+        success: false,
+        skipped: true,
+        message: 'Firebase not configured in environment'
+      };
+    }
     const message = {
       topic: 'police_emergency_channel',
       notification: {

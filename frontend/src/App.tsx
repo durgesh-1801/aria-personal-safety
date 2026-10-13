@@ -7,6 +7,7 @@ import { isAuthenticated, logout as authLogout, getUser, setToken, setUser, getT
 import { authService, profileService, incidentService, healthService } from './services/api';
 import { connectSocket, disconnectSocket, onIncidentCreated, onIncidentResolved } from './services/socket';
 import { getContacts, saveContacts, seedDefaultContacts, addContact as addContactLocal, removeContact as removeContactLocal } from './services/contacts';
+import { getRealCoordinates } from './services/location';
 
 // Views
 import SplashView from './components/SplashView';
@@ -417,18 +418,17 @@ export default function App() {
       let latitude: number | null = null;
       let longitude: number | null = null;
 
-      if (coords) {
+      if (coords && !(coords.lat === 0 && coords.lng === 0)) {
         latitude = coords.lat;
         longitude = coords.lng;
       } else {
-        try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
-          );
-          latitude = pos.coords.latitude;
-          longitude = pos.coords.longitude;
-        } catch {
-          console.warn('[SOS] GPS unavailable — incident will be filed without coordinates.');
+        const realFix = await getRealCoordinates(8000);
+        if (realFix) {
+          latitude = realFix.lat;
+          longitude = realFix.lng;
+          console.log(`[SOS] Acquired real coordinates via ${realFix.source}: ${latitude}, ${longitude} (${realFix.city || ''})`);
+        } else {
+          console.warn('[SOS] Real GPS unavailable — incident will be filed without coordinates.');
         }
       }
 

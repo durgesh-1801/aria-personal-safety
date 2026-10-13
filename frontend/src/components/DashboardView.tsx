@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Mic, ArrowRight, Shield, ShieldCheck, MapPin, Bell, Activity, Play, Zap } from 'lucide-react';
+import { watchRealCoordinates } from '../services/location';
 
 interface DashboardViewProps {
-  onTriggerSOS: () => void;
+  onTriggerSOS: (triggerType?: string, extraInfo?: string, coords?: { lat: number; lng: number } | null) => void;
   onGoToScreen: (screen: any) => void;
   userName: string;
   userAvatar: string;
@@ -31,20 +32,14 @@ export default function DashboardView({
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        },
-        (err) => {
-          console.warn('[GPS] Geolocation preview fallback:', err.message);
-          setGpsCoords({ lat: 37.7749, lng: -122.4194 });
-        },
-        { timeout: 5000, enableHighAccuracy: true }
-      );
-    } else {
-      setGpsCoords({ lat: 37.7749, lng: -122.4194 });
-    }
+    // Stream real hardware GNSS or genuine GeoIP location; never fake coordinates
+    const unwatch = watchRealCoordinates((coords) => {
+      setGpsCoords({ lat: coords.lat, lng: coords.lng });
+    });
+
+    return () => {
+      unwatch();
+    };
   }, []);
 
   // Wave animation for ambient voice feed representation
@@ -95,7 +90,7 @@ export default function DashboardView({
 
   const triggerSOS = () => {
     endPress();
-    onTriggerSOS();
+    onTriggerSOS('manual', undefined, gpsCoords);
   };
 
   const safeStatus = riskScore < 50;
@@ -314,7 +309,7 @@ export default function DashboardView({
             <p className="text-[9px] text-on-surface-variant/60 font-black uppercase tracking-[0.12em]">Coordinates</p>
             <p className="text-[11px] font-mono text-white/90 tracking-wide">
               {gpsCoords 
-                ? `${gpsCoords.lat.toFixed(4)}° N, ${Math.abs(gpsCoords.lng).toFixed(4)}° W`
+                ? `${Math.abs(gpsCoords.lat).toFixed(4)}° ${gpsCoords.lat >= 0 ? 'N' : 'S'}, ${Math.abs(gpsCoords.lng).toFixed(4)}° ${gpsCoords.lng >= 0 ? 'E' : 'W'}`
                 : 'Acquiring GPS...'}
             </p>
           </div>

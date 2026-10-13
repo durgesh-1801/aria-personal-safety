@@ -9,6 +9,16 @@ const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 
 const client = twilio(twilioSid, twilioToken);
 
+// Helper to normalize phone number to E.164 format (defaults to +91 for 10-digit Indian numbers)
+function formatE164(phone) {
+  if (!phone || typeof phone !== 'string') return '';
+  const cleaned = phone.replace(/[\s\-\(\)\.]/g, '');
+  if (cleaned.startsWith('+')) return cleaned;
+  if (/^\d{10}$/.test(cleaned)) return `+91${cleaned}`;
+  if (/^0\d{10}$/.test(cleaned)) return `+91${cleaned.slice(1)}`;
+  return `+${cleaned}`;
+}
+
 export class TwilioVoiceService {
   /**
    * Triggers an emergency voice call using Twilio.
@@ -20,15 +30,18 @@ export class TwilioVoiceService {
   static async makeEmergencyCall(phoneNumber, user, incident) {
     console.log(`[TwilioVoiceService] Preparing emergency voice call...`);
 
-    const safePhone = typeof phoneNumber === 'string' ? phoneNumber : '';
-    const masked = safePhone.length >= 4 ? `***${safePhone.slice(-4)}` : '******';
+    const formattedTarget = formatE164(phoneNumber);
+    const masked = formattedTarget.length >= 4 ? `***${formattedTarget.slice(-4)}` : '******';
 
-    console.log(`[TwilioVoiceService] Recipient: ${masked}`);
+    console.log(`[TwilioVoiceService] Recipient: ${masked} (Normalized: ${formattedTarget})`);
     console.log(`[TwilioVoiceService] User: ${user?.name || 'Unknown'} (ID: ${user?.id || 'N/A'})`);
     console.log(`[TwilioVoiceService] Incident ID: ${incident?.id || 'N/A'} (Risk: ${incident?.riskScore || 0}%)`);
 
-    // Spoken message TwiML construct
-    const speakMessage = `Emergency alert from ARIA. A critical threat has been triggered for user ${user?.name || 'Unknown User'}. The threat risk level is ${incident?.riskScore || 0} percent. The trigger type is ${incident?.triggerType || 'unknown'}. The incident location is latitude ${incident?.latitude || 'unknown'}, longitude ${incident?.longitude || 'unknown'}. Please respond immediately.`;
+    const hasCoords = incident?.latitude && incident?.longitude && !(parseFloat(incident.latitude) === 0 && parseFloat(incident.longitude) === 0);
+    const locationSpoken = hasCoords
+      ? `latitude ${parseFloat(incident.latitude).toFixed(4)}, longitude ${parseFloat(incident.longitude).toFixed(4)}`
+      : 'currently being triangulated by live GPS';
+    const speakMessage = `Emergency alert from ARIA. A critical threat has been triggered for user ${user?.name || 'Unknown User'}. The threat risk level is ${incident?.riskScore || 0} percent. The trigger type is ${incident?.triggerType || 'unknown'}. The incident location is ${locationSpoken}. Please respond immediately.`;
 
     const twimlContent = `<Response><Say voice="alice" language="en-US">${speakMessage}</Say></Response>`;
 
@@ -37,7 +50,7 @@ export class TwilioVoiceService {
 
       const call = await client.calls.create({
         twiml: twimlContent,
-        to: phoneNumber,
+        to: formattedTarget,
         from: twilioPhoneNumber
       });
 

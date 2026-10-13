@@ -9,6 +9,16 @@ const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 
 const client = twilio(twilioSid, twilioToken);
 
+// Helper to normalize phone number to E.164 format (defaults to +91 for 10-digit Indian numbers)
+function formatE164(phone) {
+  if (!phone || typeof phone !== 'string') return '';
+  const cleaned = phone.replace(/[\s\-\(\)\.]/g, '');
+  if (cleaned.startsWith('+')) return cleaned;
+  if (/^\d{10}$/.test(cleaned)) return `+91${cleaned}`;
+  if (/^0\d{10}$/.test(cleaned)) return `+91${cleaned.slice(1)}`;
+  return `+${cleaned}`;
+}
+
 // Helper to mask phone numbers in logs: expose only last 4 digits
 function maskPhone(phone) {
   try {
@@ -29,7 +39,11 @@ export class TwilioService {
    * @returns {Promise<Object>} Structured summary of delivery results
    */
   static async sendSOSAlert(contacts, user, incident) {
-    const message = `ALERT: ${user.name} has triggered an SOS event! Location: https://maps.google.com/?q=${incident.latitude},${incident.longitude}. Live risk level: ${incident.riskScore}%. Please check on them immediately.`;
+    const hasRealLocation = incident.latitude && incident.longitude && !(parseFloat(incident.latitude) === 0 && parseFloat(incident.longitude) === 0);
+    const locationStr = hasRealLocation
+      ? `https://maps.google.com/?q=${incident.latitude},${incident.longitude}`
+      : 'Acquiring GPS fix';
+    const message = `ALERT: ${user.name} has triggered an SOS event! Location: ${locationStr}. Live risk level: ${incident.riskScore}%. Please check on them immediately.`;
 
     // Guard: Do not send SMS if user has no contacts configured.
     // In development mode only, a test recipient can be specified via DEV_TEST_EMERGENCY_PHONE.
@@ -67,13 +81,13 @@ export class TwilioService {
       const name = recipient.name || 'Emergency Contact';
 
       try {
-        // Log masked recipient phone (only last 4 digits)
-        console.log(`[TwilioService] Sending SMS to recipient: ${name} (${maskPhone(phone)})`);
+        const formattedPhone = formatE164(phone);
+        console.log(`[TwilioService] Sending SMS to recipient: ${name} (${maskPhone(formattedPhone)})`);
 
         const response = await client.messages.create({
           body: message,
           from: twilioPhoneNumber,
-          to: phone
+          to: formattedPhone
         });
 
         // Log masked recipient phone (only last 4 digits)

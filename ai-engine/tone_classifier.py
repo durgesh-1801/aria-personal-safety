@@ -23,32 +23,35 @@ class ToneClassifier:
         try:
             if os.path.exists(file_path):
                 container = av.open(file_path)
-                audio_streams = [s for s in container.streams if s.type == 'audio']
-                if audio_streams:
-                    stream = audio_streams[0]
-                    # Resample to s16 (16-bit integer) mono to measure amplitude consistently
-                    resampler = av.AudioResampler(format='s16', layout='mono')
-                    amplitudes = []
-                    
-                    for frame in container.decode(stream):
-                        resampled_frames = resampler.resample(frame)
-                        for r_frame in resampled_frames:
-                            data = r_frame.to_ndarray()
-                            if data.size > 0:
-                                amplitudes.append(data.flatten())
-                                
-                    if amplitudes:
-                        all_samples = np.concatenate(amplitudes)
-                        if len(all_samples) > 0:
-                            # RMS of the PCM 16-bit signal (values range -32768 to 32767)
-                            rms_val = np.sqrt(np.mean(all_samples.astype(np.float32) ** 2))
-                            print(f"[TONE CLASSIFIER] Calculated Audio RMS Amplitude: {rms_val:.2f}")
+                try:
+                    audio_streams = [s for s in container.streams if s.type == 'audio']
+                    if audio_streams:
+                        stream = audio_streams[0]
+                        # Resample to s16 (16-bit integer) mono to measure amplitude consistently
+                        resampler = av.AudioResampler(format='s16', layout='mono')
+                        amplitudes = []
+                        
+                        for frame in container.decode(stream):
+                            resampled_frames = resampler.resample(frame)
+                            for r_frame in resampled_frames:
+                                data = r_frame.to_ndarray()
+                                if data.size > 0:
+                                    amplitudes.append(data.flatten())
+                                    
+                        if amplitudes:
+                            all_samples = np.concatenate(amplitudes)
+                            if len(all_samples) > 0:
+                                # RMS of the PCM 16-bit signal (values range -32768 to 32767)
+                                rms_val = np.sqrt(np.mean(all_samples.astype(np.float32) ** 2))
+                                print(f"[TONE CLASSIFIER] Calculated Audio RMS Amplitude: {rms_val:.2f}")
+                            else:
+                                rms_val = None
                         else:
                             rms_val = None
                     else:
                         rms_val = None
-                else:
-                    rms_val = None
+                finally:
+                    container.close()
             else:
                 rms_val = None
         except Exception as e:

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ShieldCheck, Activity, Search, ShieldAlert, Cpu, Check, Compass, Ear, RefreshCw, Mic, MicOff, AlertTriangle, Square } from 'lucide-react';
 import { monitoringService } from '../services/api';
 import { ChunkAnalysis, BackendIncident, EmergencyContact } from '../types';
+import { watchRealCoordinates, getRealCoordinates } from '../services/location';
 
 interface MonitoringViewProps {
   contacts?: EmergencyContact[];
@@ -140,25 +141,23 @@ export default function MonitoringView({
   const gpsCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const fresh = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          gpsCoordsRef.current = fresh;
-          setGpsCoords(fresh);
-          setGpsFixOk(true);
-          gpsFixTimeRef.current = Date.now();
-          setGpsFixAge(0);
-        },
-        () => {
-          // GPS unavailable — do NOT invent coordinates.
-          // The UI already shows "Location unavailable" / "No Fix" in this state.
-          setGpsFixOk(false);
-        }
-      );
-    } else {
-      setGpsFixOk(false);
-    }
+    const unwatch = watchRealCoordinates(
+      (coords) => {
+        const fresh = { lat: coords.lat, lng: coords.lng };
+        gpsCoordsRef.current = fresh;
+        setGpsCoords(fresh);
+        setGpsFixOk(true);
+        gpsFixTimeRef.current = Date.now();
+        setGpsFixAge(0);
+      },
+      () => {
+        setGpsFixOk(false);
+      }
+    );
+
+    return () => {
+      unwatch();
+    };
   }, []);
 
   // ── Start Monitoring ──────────────────────────────────────────────────────
@@ -341,18 +340,16 @@ export default function MonitoringView({
       // Get latest GPS — use the freshly fetched fix directly and store in ref
       // to avoid React state closure stale-value bugs.
       let currentFix = gpsCoordsRef.current;
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 })
-        );
-        currentFix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        gpsCoordsRef.current = currentFix;
-        setGpsCoords(currentFix);
-        setGpsFixOk(true);
-        gpsFixTimeRef.current = Date.now();
-        setGpsFixAge(0);
-      } catch {
-        // use existing coords from ref; mark fix as stale (don't reset gpsFixOk — last known state is fine)
+      if (!currentFix) {
+        const realFix = await getRealCoordinates(3000);
+        if (realFix) {
+          currentFix = { lat: realFix.lat, lng: realFix.lng };
+          gpsCoordsRef.current = currentFix;
+          setGpsCoords(currentFix);
+          setGpsFixOk(true);
+          gpsFixTimeRef.current = Date.now();
+          setGpsFixAge(0);
+        }
       }
 
       const formData = new FormData();

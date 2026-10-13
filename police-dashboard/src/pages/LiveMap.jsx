@@ -46,6 +46,28 @@ export default function LiveMap() {
         subdomains: 'abcd',
         maxZoom: 20
       }).addTo(mapInstance.current);
+
+      // Center map around dispatcher's real station region when no active incidents are focused
+      if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (mapInstance.current && incidents.length === 0) {
+              mapInstance.current.setView([pos.coords.latitude, pos.coords.longitude], 12);
+            }
+          },
+          () => {
+            fetch('https://get.geojs.io/v1/ip/geo.json')
+              .then(r => r.json())
+              .then(d => {
+                if (d.latitude && d.longitude && mapInstance.current && incidents.length === 0) {
+                  mapInstance.current.setView([parseFloat(d.latitude), parseFloat(d.longitude)], 12);
+                }
+              })
+              .catch(() => {});
+          },
+          { timeout: 5000 }
+        );
+      }
     }
 
     return () => {

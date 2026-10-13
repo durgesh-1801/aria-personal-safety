@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shield, Bell, Phone, Star, AlertTriangle, AlertCircle, Trash, MapPin, User, Car, Check, Navigation, Play, Compass, History } from 'lucide-react';
 import { monitoringService } from '../services/api';
+import { getRealCoordinates } from '../services/location';
 import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 
@@ -189,22 +190,15 @@ export default function SafeRideView({ onTriggerSOS }: SafeRideProps) {
     // Reset alert flags
     setShowAlert(false);
 
-    // Get current GPS coordinates or use Kolkata fallback from screenshots
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const start = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          initializeSimulation(start);
-        },
-        (err) => {
-          console.warn('[SAFE_RIDE] GPS unavailable, using fallback coordinates.');
-          initializeSimulation({ lat: 22.4823, lng: 88.2987 });
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    } else {
-      initializeSimulation({ lat: 22.4823, lng: 88.2987 });
-    }
+    // Get real current GPS coordinates or genuine GeoIP location
+    getRealCoordinates(6000).then((realFix) => {
+      if (realFix) {
+        initializeSimulation({ lat: realFix.lat, lng: realFix.lng });
+      } else {
+        // Fallback to real city coordinates if completely offline
+        initializeSimulation({ lat: 28.6139, lng: 77.2090 });
+      }
+    });
   };
 
   const initializeSimulation = (start: { lat: number; lng: number }) => {
