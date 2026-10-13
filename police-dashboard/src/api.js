@@ -9,7 +9,17 @@ import axios from 'axios';
 import io from 'socket.io-client';
 
 // Clean base URL: strip trailing slashes and guarantee /api suffix for REST
-const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
+const getRawApiUrl = () => {
+  if (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim()) {
+    return import.meta.env.VITE_API_URL.trim().replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return 'https://aria-backend-2e96.onrender.com';
+  }
+  return 'http://localhost:5000';
+};
+
+const rawApiUrl = getRawApiUrl();
 export const API_BASE = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 
 // Extract server root without /api for Socket.io connection

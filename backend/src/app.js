@@ -41,14 +41,11 @@ if (fs.existsSync(backendEnv)) {
   dotenv.config({ path: backendEnv });
 }
 
-// ── Explicit CORS Origins ───────────────────────────────────────────────────
-// Restricts API and WebSocket live feed access to the two authorized frontends
-// (User Web App and Police Dispatcher Dashboard), read from ALLOWED_ORIGINS
-// so staging and production configurations can differ securely.
+// ── Dynamic & Explicit CORS Configuration ─────────────────────────────────────
 const defaultAllowedOrigins = [
-  'http://localhost:5173', // ARIA User Frontend (Vite default)
-  'http://localhost:3000', // Police Dispatcher Dashboard (Vite port 3000)
-  'http://localhost:5174', // Alternative Vite local dev port
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:5174',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:5174'
@@ -59,12 +56,36 @@ const envOrigins = (process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || ''
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-export const allowedOrigins = envOrigins.length > 0 ? envOrigins : defaultAllowedOrigins;
+export const allowedOrigins = [...defaultAllowedOrigins, ...envOrigins];
+
+/**
+ * Checks whether an incoming origin is permitted.
+ * Permits configured domains, localhost, and deployed frontend subdomains.
+ */
+export const isOriginAllowed = (origin) => {
+  if (!origin) return true; // Server-to-server, mobile app webviews, curl
+  if (allowedOrigins.includes('*')) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    const host = url.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return true;
+    if (host.endsWith('.vercel.app') || host.endsWith('.onrender.com') || host.endsWith('.netlify.app')) return true;
+  } catch (e) {}
+  return false;
+};
 
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+      callback(null, false);
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-Internal-Secret']
 };
 
@@ -72,7 +93,9 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      callback(null, isOriginAllowed(origin));
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
   }
@@ -80,8 +103,9 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 5000;
 
-// Enable JSON parsing and restricted CORS
+// Enable CORS with preflight handling and JSON parsing
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -121,6 +145,21 @@ app.use('/api', alertRoutes);
 app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/police', policeRoutes);
 app.use('/api/evidence', evidenceRoutes);
+
+// Root service status endpoint
+app.get('/', (req, res) => {
+  const { dbMode, dbModeDescription } = getHealthStatus();
+  res.status(200).json({
+    success: true,
+    status: 'ONLINE',
+    service: 'ARIA Personal Safety Backend Server',
+    version: '2.0.0',
+    dbMode,
+    dbModeDescription,
+    healthEndpoint: '/api/health',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Base route for health checks
 app.get('/health', (req, res) => {
