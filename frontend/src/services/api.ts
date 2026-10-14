@@ -106,7 +106,7 @@ export const monitoringService = {
   startSession: () => api.post('/api/monitoring/start'),
   uploadChunk: (formData: FormData) =>
     api.post('/api/monitoring/chunk', formData, {
-      timeout: 4500, // Shorter than 5000ms chunk interval to prevent connection pileups under load
+      timeout: 20000, // 20s allows sufficient headroom for cloud network latency and audio analysis without artificial timeouts
     }),
   stopSession: (sessionId: string) =>
     api.post('/api/monitoring/stop', { sessionId }),

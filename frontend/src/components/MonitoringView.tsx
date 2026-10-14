@@ -257,7 +257,7 @@ export default function MonitoringView({
 
       // 4. Overlapping window uploader:
       // Sequential scheduling: never sends the next chunk until the previous one has come back or timed out.
-      // Timeout (4500ms) is shorter than the interval (5000ms), eliminating stacked requests under load.
+      // Chunks are guarded by uploadInProgressRef and awaited sequentially to eliminate stacked requests.
       isMonitoringActiveRef.current = true;
       const CHUNK_INTERVAL_MS = 5000;
 
