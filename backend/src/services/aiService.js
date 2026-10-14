@@ -8,7 +8,7 @@ const getAIEngineUrl = () => {
 };
 
 const AI_ENGINE_URL = getAIEngineUrl();
-const DEFAULT_AI_TIMEOUT_MS = parseInt(process.env.AI_ANALYSIS_TIMEOUT_MS, 10) || 8000;
+export const DEFAULT_AI_TIMEOUT_MS = parseInt(process.env.AI_ANALYSIS_TIMEOUT_MS, 10) || 15000;
 
 // ── Burst-absorbing Request Queue ───────────────────────────────────────────
 // Queues concurrent requests between backend and AI service to absorb bursts
@@ -53,7 +53,8 @@ export class AIService {
 
     try {
       const formData = new FormData();
-      const audioBlob = new Blob([fileBuffer], { type: 'audio/wav' });
+      const mimeType = (fileName && fileName.endsWith('.webm')) ? 'audio/webm' : 'audio/wav';
+      const audioBlob = new Blob([fileBuffer], { type: mimeType });
       formData.append('file', audioBlob, fileName);
       formData.append('latitude', String(latitude || 0.0));
       formData.append('longitude', String(longitude || 0.0));
@@ -83,14 +84,15 @@ export class AIService {
         threatLevel: res.data.threat_level || res.data.threatLevel || 'SAFE'
       };
     } catch (err) {
-      console.warn(`[AI SERVICE INTEGRATOR] AI analysis unavailable: ${err.message}`);
+      const detail = err.response?.data?.detail || err.message;
+      console.warn(`[AI SERVICE INTEGRATOR] AI analysis unavailable: ${detail}`);
       return {
         available: false,
         distress: false,
         confidence: 0,
         transcript: '',
         riskScore: null,
-        message: 'AI analysis unavailable. Automatic audio detection is not running.'
+        message: `AI analysis unavailable (${detail})`
       };
     }
   }

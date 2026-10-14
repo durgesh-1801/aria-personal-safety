@@ -1,7 +1,7 @@
 import { Incident } from '../models/Incident.model.js';
 import { User } from '../models/User.model.js';
 import { MonitoringSession } from '../models/MonitoringSession.model.js';
-import { AIService } from '../services/aiService.js';
+import { AIService, DEFAULT_AI_TIMEOUT_MS } from '../services/aiService.js';
 import { AudioEvidenceService } from '../services/audioEvidenceService.js';
 import { StorageService } from '../services/storageService.js';
 import { dispatchTieredAlerts } from '../config/alertConfig.js';
@@ -113,7 +113,7 @@ export const analyzeChunk = asyncHandler(async (req, res) => {
     isIsolated: isIsolated === 'true' || isIsolated === true,
     motionAnomaly: hasMotionAnomaly,
     language: null,
-    timeoutMs: 4000
+    timeoutMs: DEFAULT_AI_TIMEOUT_MS
   });
 
   const { distress, confidence, transcript, riskScore } = analysis;
