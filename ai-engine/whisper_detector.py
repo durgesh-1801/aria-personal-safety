@@ -9,8 +9,8 @@ try:
 except (ImportError, OSError):
     WhisperModel = None
 
-WHISPER_MODEL_NAME = os.environ.get("WHISPER_MODEL_NAME", "small")
-WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", "/app/models/whisper-small")
+WHISPER_MODEL_NAME = os.environ.get("WHISPER_MODEL_NAME", "base")
+WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", f"/app/models/whisper-{WHISPER_MODEL_NAME}")
 
 class WhisperDetector:
     def __init__(self):
