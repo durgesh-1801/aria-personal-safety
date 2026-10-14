@@ -79,8 +79,8 @@ export default function MonitoringView({
   const lastBackendConfidenceRef = useRef<number>(15);
 
   // Risk history — one real point per chunk analysis, max 20 points kept
-  // Seeded with a flat baseline so the chart isn't empty before monitoring starts
-  const [riskHistory, setRiskHistory] = useState<number[]>([]);
+  // Seeded with a flat 0% baseline so the chart isn't empty before monitoring starts
+  const [riskHistory, setRiskHistory] = useState<number[]>([0, 0]);
   const uploadInProgressRef = useRef(false);
 
   useEffect(() => {
@@ -112,13 +112,17 @@ export default function MonitoringView({
 
   // Generate cubic bezier curvy SVG path (scaled to fill more vertical space)
   const getCurvePath = (data: number[]) => {
-    if (data.length === 0) return '';
+    if (!data || data.length === 0) return 'M 0,80 L 400,80';
+    if (data.length === 1) {
+      const y = 80 - (Math.max(0, Math.min(100, data[0] ?? 0)) / 100) * 70;
+      return `M 0,${y} L 400,${y}`;
+    }
     const width = 400;
     const step = width / (data.length - 1);
     
     const coords = data.map((val, idx) => ({
       x: idx * step,
-      y: 80 - (val / 100) * 70
+      y: 80 - (Math.max(0, Math.min(100, val ?? 0)) / 100) * 70
     }));
     
     let path = `M ${coords[0].x},${coords[0].y}`;
@@ -376,6 +380,11 @@ export default function MonitoringView({
         setTranscript(data.message || 'AI analysis unavailable. Automatic audio detection is not running.');
         setConfidence(0);
         setDistressDetected(false);
+        setChunkCount((prev) => prev + 1);
+        setRiskHistory((prev) => {
+          const next = [...prev, 0];
+          return next.length > 20 ? next.slice(next.length - 20) : next;
+        });
         setLastUploadOk(true);
         return;
       }
@@ -785,20 +794,24 @@ export default function MonitoringView({
               />
               
               {/* Highlight score dot at the latest point on the right */}
-              <circle 
-                cx="400" 
-                cy={80 - (riskHistory[riskHistory.length - 1] / 100) * 70} 
-                r="4.5" 
-                fill={distressDetected ? '#ff544c' : '#72d4ef'} 
-              />
-              {isActive && (
-                <circle 
-                  cx="400" 
-                  cy={80 - (riskHistory[riskHistory.length - 1] / 100) * 70} 
-                  r="9" 
-                  fill={distressDetected ? '#ff544c' : '#72d4ef'} 
-                  className="animate-ping opacity-30" 
-                />
+              {riskHistory.length > 0 && typeof riskHistory[riskHistory.length - 1] === 'number' && !isNaN(riskHistory[riskHistory.length - 1]) && (
+                <>
+                  <circle 
+                    cx="400" 
+                    cy={80 - (Math.max(0, Math.min(100, riskHistory[riskHistory.length - 1])) / 100) * 70} 
+                    r="4.5" 
+                    fill={distressDetected ? '#ff544c' : '#72d4ef'} 
+                  />
+                  {isActive && (
+                    <circle 
+                      cx="400" 
+                      cy={80 - (Math.max(0, Math.min(100, riskHistory[riskHistory.length - 1])) / 100) * 70} 
+                      r="9" 
+                      fill={distressDetected ? '#ff544c' : '#72d4ef'} 
+                      className="animate-ping opacity-30" 
+                    />
+                  )}
+                </>
               )}
             </svg>
           </div>
